@@ -77,7 +77,7 @@ PayloadAllThings -> linux priv esc -> Looting for passwords
 grep --color=auto -rnw '/' -ie "PASSWORD" --color=always 2> /dev/null
 
 we can automate all of this with linPeas tool 
-maybe also there is service running and has a hidden passwords inside it -> ps aux 
+maybe also there is a service running and has a hidden passwords inside it -> ps aux 
 
 
 3. Escalation via weak file permissions :--
@@ -290,6 +290,8 @@ chmod +x exploit
 ./exploit 
 we r root  
 
+Tips :- 
+Check for ports in linpeas output , maybe there's a local service running and u can do a privilege escalation via it , local web app server running as root and ..etc
 
 
 
