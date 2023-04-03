@@ -13,6 +13,7 @@ lscpu ==> information about arcticture and other cpu model ..etc
 sudo -V ==> sudo information and version 
 
 
+
 2. enumerate services 
 
 ps aux ==> this will enumearate services and what user is running that service 
@@ -28,10 +29,10 @@ id ==> to enumerate user and group id
 sudo -l ==> to see which programs are running as root user and to exploit them "GTFObins is the key"
 cat /etc/passwd ==> to enumerate all users in the machine "cut -d : -f 1" 
 cat /etc/shadow ==> if we can read it , we can crack the users hashes 
-cat /etc/group 
+cat /etc/group ==> to enumerate groups 
 we can also do history to see what we miss in the history 
 
-* sudo su - ==> try to switch the user with the same password :) *
+* sudo su - ==> try to switch the user with the same password , old trick but it works sometimes :) *
 ----------------------------------
 
 Third : Netwrok enmumeration :-- 
@@ -47,19 +48,24 @@ arp -a or ip neigh ==> to see what is stale and what its reachable
 netstat -ano ==> to see what ports are open and what communication happen here with other machines
 ----------------------------------
 
+-> rbash restricted shell escape :- 
+ - https://www.hacknos.com/rbash-escape-rbash-restricted-shell-escape/
+ we can also use sshpass for this 
+ sshpass -p 'P@55W0rd1!2@' ssh mindy@10.10.10.51 -t bash
+ Recommneded " https://0xdf.gitlab.io/2020/04/30/htb-solidstate.html " 
 
 ------------------------------------------------------------------------------------------------------
 
 @@@@@@@@@@@@@@@@@@@@@@@@
 @@@ Priv Esc Techniques 
 @@@@@@@@@@@@@@@@@@@@@@@@
-
+*linPEAS is the main automation tool for me *
 
 
 1. Kernel exploit :--
 
 uname -a to see the kernel version and search for public exploit for it and use it
-or u can also use Linux exploit suggestor tool to find kernel exploits for the machine 
+or u can also use Linux exploit suggestor tool to find kernel exploits for the machine "linPEAS will do all that"
 
 
 2. Escalation via stored password :-- 
@@ -87,7 +93,7 @@ we need first to identify the hash type, search about hashcat hash types search 
 4. Escalation via SSH keys Hunting 
 
 also in PasswordAllthings -> methodology and resources -> linux priv esc -> looting for passwords 
-few nice command to automate the shh key searhing in the machine .
+few nice command to automate the ssh key searhing in the machine .
 also linPeas will automate this .	
 
 
@@ -95,7 +101,6 @@ also linPeas will automate this .
 
 5. sudo shell escaping 
 
-sudo -V ==> To see the version of sudo 
 sudo -l , to see what programs are running as root 
 just use GTFObins and search for the binary program that running as root and go down to the sudo priv
 
@@ -277,7 +282,7 @@ Lets go to GTFObins directly , and run bash with docker
 
 20. CVE-2021-4034 (Policy toolkit) or Polkit :- "There's a great tryHackMe room for it"
 
-Literally in every linux unix distro by default , since released in 2009 
+Literally in every linux,unix distro by default , since released in 2009 
 exploit ==> https://github.com/arthepsy/CVE-2021-4034
 compile it 
 gcc cve-2021-4034.c -o exploit
